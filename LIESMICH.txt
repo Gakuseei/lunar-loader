@@ -1,0 +1,22 @@
+Moon Sweepers Mods
+
+Installieren
+1. In Steam: Rechtsklick auf Moon Sweepers > Verwalten > Lokale Dateien durchsuchen.
+2. Den Inhalt dieser Zip in diesen Ordner entpacken, sodass version.dll neben MoonSweepers.exe liegt.
+3. Spiel starten. Unter SETTINGS gibt es jetzt den Reiter MODS.
+
+Linux / Steam Deck
+In Steam unter Eigenschaften > Startoptionen eintragen:
+WINEDLLOVERRIDES="version=n,b" %command%
+
+Mods
+Jede Mod ist ein Ordner in Mods. Ordner loeschen entfernt die Mod.
+Im Reiter MODS kann man jede Mod sofort an- und ausschalten und einstellen.
+
+Im Koop
+Strom und Maschinen-Tempo rechnet der Host. Damit sie wirken, braucht der Host die Mods.
+Das Licht rechnet jeder Spieler selbst.
+
+Probleme
+Logs liegen in Mods/ModLoader.log und Mods/<Mod>/<Mod>.log, die vorherige Runde in den -prev.log Dateien.
+Alles entfernen: version.dll und den Ordner Mods loeschen.
