@@ -14,7 +14,7 @@ for file in buffer hook trampoline hde/hde64; do
     $CC -O2 -c -I$MINHOOK -o "build/minhook_$(basename $file).o" "$MINHOOK/$file.c"
 done
 $CC $FLAGS $WARNINGS -shared -Ithird_party/minhook/include -o dist/game/version.dll \
-    loader/*.c loader/version.def build/minhook_*.o
+    loader/*.c loader/version.def build/minhook_*.o -lbcrypt -lurlmon
 
 for dir in mods/*/; do
     name=$(basename "$dir")

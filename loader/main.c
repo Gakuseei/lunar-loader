@@ -344,7 +344,9 @@ static void startFramework(void)
         return;
     }
     loaderLog(menuInstall() ? "Menue MODS eingerichtet" : "Menue MODS nicht moeglich, Mods laufen trotzdem");
+    applyPending(modsDir);
     loadMods();
+    onlineRefresh();
     upgradesInstall(modsDir);
 }
 

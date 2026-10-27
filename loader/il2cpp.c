@@ -122,6 +122,13 @@ void setArrayItem(Il2CppObject *array, int index, Il2CppObject *item)
     il2cpp_gc_wbarrier_set_field(array, slot, item);
 }
 
+void setObjectField(Il2CppObject *object, const char *name, Il2CppObject *value)
+{
+    int offset = fieldOffset(classOf(object), name);
+    if (offset >= 0)
+        il2cpp_gc_wbarrier_set_field(object, (void **)((unsigned char *)object + offset), value);
+}
+
 Il2CppObject *invoke(const MethodInfo *method, void *instance, void **params)
 {
     void *exception = NULL;

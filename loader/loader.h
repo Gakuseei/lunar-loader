@@ -65,7 +65,8 @@ struct Mod {
     void (*onEnabled)(Mod *mod, int enabled);
     Setting settings[MAX_SETTINGS];
     int settingCount;
-    NativeCall *listGet, *listSet, *listEditable, *open;
+    NativeCall *listGet, *listSet, *listEditable, *open, *click, *update, *remove;
+    int confirm;
 };
 
 extern Mod mods[MAX_MODS];
@@ -95,6 +96,7 @@ extern int invokeError;
 Il2CppString *newString(const char *utf8);
 Il2CppObject *newArray(Il2CppClass *element, int length);
 void setArrayItem(Il2CppObject *array, int index, Il2CppObject *item);
+void setObjectField(Il2CppObject *object, const char *name, Il2CppObject *value);
 Il2CppObject *invoke(const MethodInfo *method, void *instance, void **params);
 GcHandle keepAlive(Il2CppObject *object);
 Il2CppObject *aliveTarget(GcHandle handle);
@@ -116,3 +118,31 @@ int registerUpgrade(Mod *mod, const char *id, const char *titleDe, const char *t
     const char *summaryEn, int glyph, int maxLevel, const int *prices);
 int upgradeLevel(void *world, const char *id);
 void upgradesInstall(const wchar_t *modsDir);
+
+#define MAX_ONLINE 64
+
+typedef enum { ONLINE_OFF, ONLINE_LOADING, ONLINE_READY, ONLINE_FAILED } OnlineState;
+typedef enum { INSTALL_NONE, INSTALL_CURRENT, INSTALL_OUTDATED, INSTALL_PENDING, INSTALL_REMOVING } InstallState;
+typedef enum { DOWNLOAD_IDLE, DOWNLOAD_RUNNING, DOWNLOAD_DONE, DOWNLOAD_FAILED } DownloadStatus;
+
+typedef struct {
+    char folder[64], name[96], de[256], en[256], version[24], author[48], url[300], sha256[65];
+    int community;
+    volatile DownloadStatus status;
+    int confirm;
+    NativeCall *open, *install;
+} OnlineMod;
+
+extern OnlineMod onlineMods[MAX_ONLINE];
+extern int onlineCount;
+
+void applyPending(const wchar_t *modsDir);
+int onlineEnabled(void);
+void setOnlineEnabled(int enabled);
+void onlineRefresh(void);
+int onlineChanged(void);
+OnlineState onlineState(void);
+OnlineMod *onlineMod(const char *folder);
+InstallState installState(const char *folder);
+void installMod(OnlineMod *mod);
+void removeMod(const char *folder);

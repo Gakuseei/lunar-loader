@@ -7,10 +7,11 @@
 
 static struct {
     MethodInfo *constructor, *build, *toggleRow, *choiceRow, *buttonRow, *textRow, *refreshPage, *gap;
-    MethodInfo *setText, *childCount, *getChild, *gameObject, *destroy;
-    Il2CppClass *buildDevType, *actionType, *stringType, *funcBoolType, *actionBoolType, *funcIntType, *actionIntType;
+    MethodInfo *setText, *childCount, *getChild, *gameObject, *destroy, *onClick, *addListener;
+    Il2CppClass *buildDevType, *actionType, *unityActionType, *stringType, *funcBoolType, *actionBoolType, *funcIntType, *actionIntType;
     void (*originalConstructor)(void *self, void *kit, void *host, void *buildDev, const void *method);
     void (*originalBuild)(void *self, void *frame, const void *method);
+    void (*originalUpdate)(void *self, const void *method);
     NativeCall *buildDev, *back;
     GcHandle screen;
     Mod *page;
@@ -79,25 +80,6 @@ static void renameTab(void *screen)
         setText(text, "MODS");
     else
         reportOnce(&reported, "Reiter-Name nicht gefunden");
-}
-
-/** Game buttons are upper case; covers ASCII and the German umlauts */
-static void upperCase(const char *text, char *out, size_t size)
-{
-    size_t length = 0;
-    for (size_t i = 0; text[i] && length + 3 < size; i++) {
-        unsigned char c = (unsigned char)text[i];
-        if (c >= 'a' && c <= 'z') {
-            out[length++] = (char)(c - 32);
-        } else if (c == 0xC3 && ((unsigned char)text[i + 1] == 0xA4 || (unsigned char)text[i + 1] == 0xB6
-                                    || (unsigned char)text[i + 1] == 0xBC)) {
-            out[length++] = (char)c;
-            out[length++] = (char)((unsigned char)text[++i] - 0x20);
-        } else {
-            out[length++] = (char)c;
-        }
-    }
-    out[length] = 0;
 }
 
 static void toggleRow(void *screen, const char *name, NativeCall *get, NativeCall *set, NativeCall *editable)
@@ -190,6 +172,7 @@ static void rebuild(void);
 static void openMod(void *context)
 {
     menu.page = context;
+    menu.page->confirm = 0;
     rebuild();
 }
 
@@ -218,25 +201,105 @@ static NativeCall *actionCall(void *context, void (*action)(void *))
     return call;
 }
 
-#define BUTTONS_PER_ROW 3
+enum { VIEW_INSTALLED, VIEW_AVAILABLE };
 
-static int hasSettings(Mod *mod)
+static int view;
+static OnlineMod *onlinePage;
+static NativeCall *showInstalled, *showAvailable, *onlineGet, *onlineSet, *retry, *backOnline;
+
+static void setView(void *context)
 {
-    for (int i = 0; i < mod->settingCount; i++)
-        if (mod->settings[i].kind != SETTING_NOTE)
-            return modUsable(mod);
-    return 0;
+    view = context ? VIEW_AVAILABLE : VIEW_INSTALLED;
+    if (view == VIEW_AVAILABLE && (onlineState() == ONLINE_OFF || onlineState() == ONLINE_FAILED))
+        onlineRefresh();
+    rebuild();
 }
 
-/** One On/Off row per mod, then the game's own button rows to open each mod's page */
-static void buildList(void *screen)
+static int onlineValue(void *context) { (void)context; return onlineEnabled(); }
+static void onlineSwitch(void *context, int value) { (void)context; setOnlineEnabled(value); rebuild(); }
+static void retryOnline(void *context) { (void)context; onlineRefresh(); rebuild(); }
+
+static void openOnline(void *context)
 {
-    int de = germanText();
+    onlinePage = context;
+    if (onlinePage)
+        onlinePage->confirm = 0;
+    rebuild();
+}
+
+static void pressInstall(void *context)
+{
+    OnlineMod *mod = context;
+    if (mod->confirm)
+        installMod(mod);
+    mod->confirm = !mod->confirm;
+    rebuild();
+}
+
+static void pressUpdate(void *context)
+{
+    Mod *mod = context;
+    OnlineMod *online = onlineMod(mod->name);
+    if (mod->confirm == 1 && online)
+        installMod(online);
+    mod->confirm = mod->confirm == 1 ? 0 : 1;
+    rebuild();
+}
+
+static void pressRemove(void *context)
+{
+    Mod *mod = context;
+    if (mod->confirm == 2)
+        removeMod(mod->name);
+    mod->confirm = mod->confirm == 2 ? 0 : 2;
+    rebuild();
+}
+
+/** Enter runs Item.press and a mouse click the row's button; both open the mod page, the arrows still switch it */
+static void pressOpens(void *screen, NativeCall *press, NativeCall *click)
+{
+    void *page = devPage(screen);
+    void *items = page ? objectField(page, "items") : NULL;
+    int count = items ? *(int32_t *)((unsigned char *)items + 0x18) : 0;
+    void *array = count ? *(void **)((unsigned char *)items + 0x10) : NULL;
+    void *item = array ? ((void **)((unsigned char *)array + 0x20))[count - 1] : NULL;
+    if (!item)
+        return;
+    setObjectField(item, "press", callDelegate(press, menu.actionType));
+    void *row = objectField(item, "row");
+    void *button = row ? objectField(row, "button") : NULL;
+    void *event = button && menu.onClick ? invoke(menu.onClick, button, NULL) : NULL;
+    void *params[1] = { callDelegate(click, menu.unityActionType) };
+    if (event && params[0])
+        invoke(menu.addListener, event, params);
+}
+
+static void viewRow(void *screen, int de)
+{
+    if (!showInstalled) {
+        showInstalled = actionCall(NULL, setView);
+        showAvailable = actionCall((void *)1, setView);
+    }
+    const char *labels[2] = { de ? "INSTALLIERT" : "INSTALLED", de ? "VERFÜGBAR" : "AVAILABLE" };
+    NativeCall *presses[2] = { showInstalled, showAvailable };
+    const char *title = view == VIEW_INSTALLED ? de ? "Installiert" : "Installed" : de ? "Verfügbar" : "Available";
+    buttonRow(screen, title, labels, presses, 2);
+}
+
+static void backRow(void *screen, const char *title, NativeCall *back, int de)
+{
+    const char *label = de ? "ZURÜCK" : "BACK";
+    buttonRow(screen, title, &label, &back, 1);
+}
+
+static void buildInstalled(void *screen, int de)
+{
     if (!modCount) {
         textRow(screen, de ? "Keine Mods gefunden. Mods gehören in den Ordner Mods im Spielordner."
                            : "No mods found. Mods go into the Mods folder inside the game folder.");
         return;
     }
+    int pending = 0;
     for (int i = 0; i < modCount; i++) {
         Mod *mod = &mods[i];
         if (!mod->listGet) {
@@ -244,30 +307,15 @@ static void buildList(void *screen)
             mod->listSet = valueCall(CALL_ACTION_BOOL, mod, NULL, switchMod);
             mod->listEditable = valueCall(CALL_FUNC_BOOL, mod, modUsable, NULL);
             mod->open = actionCall(mod, openMod);
+            mod->click = actionCall(mod, openMod);
         }
-        toggleRow(screen, de ? mod->nameDe : mod->nameEn, mod->listGet, mod->listSet, mod->listEditable);
+        char name[128];
+        snprintf(name, sizeof name, "%s  ›", de ? mod->nameDe : mod->nameEn);
+        toggleRow(screen, name, mod->listGet, mod->listSet, mod->listEditable);
+        pressOpens(screen, mod->open, mod->click);
+        InstallState state = installState(mod->name);
+        pending |= state == INSTALL_PENDING || state == INSTALL_REMOVING;
     }
-
-    char names[BUTTONS_PER_ROW][96];
-    const char *labels[BUTTONS_PER_ROW];
-    NativeCall *presses[BUTTONS_PER_ROW];
-    int count = 0, rows = 0;
-    for (int i = 0; i <= modCount; i++) {
-        if (i < modCount && hasSettings(&mods[i])) {
-            upperCase(de ? mods[i].nameDe : mods[i].nameEn, names[count], sizeof names[count]);
-            labels[count] = names[count];
-            presses[count] = mods[i].open;
-            count++;
-        }
-        if (count == BUTTONS_PER_ROW || (i == modCount && count)) {
-            if (!rows)
-                gap(screen);
-            buttonRow(screen, rows ? "" : de ? "Einstellungen" : "Settings", labels, presses, count);
-            rows++;
-            count = 0;
-        }
-    }
-
     for (int i = 0; i < modCount; i++) {
         if (modUsable(&mods[i]))
             continue;
@@ -276,18 +324,50 @@ static void buildList(void *screen)
             de ? mods[i].nameDe : mods[i].nameEn);
         textRow(screen, line);
     }
+    if (pending)
+        textRow(screen, de ? "Starte das Spiel neu, damit die Änderungen wirken." : "Restart the game to apply the changes.");
 }
 
-static void buildModPage(void *screen, Mod *mod)
+static void statusRow(void *screen, Mod *mod, int de)
 {
-    int de = germanText(), greyed = 0;
+    OnlineMod *online = onlineMod(mod->name);
+    char line[256] = "";
+    switch (installState(mod->name)) {
+    case INSTALL_PENDING:
+        snprintf(line, sizeof line, de ? "Update geladen, aktiv nach dem Neustart." : "Update downloaded, active after a restart.");
+        break;
+    case INSTALL_REMOVING:
+        snprintf(line, sizeof line, de ? "Wird beim nächsten Start entfernt." : "Will be removed on the next start.");
+        break;
+    case INSTALL_OUTDATED:
+        snprintf(line, sizeof line, de ? "Update auf Version %s verfügbar." : "Update to version %s available.", online->version);
+        break;
+    default:
+        if (online)
+            snprintf(line, sizeof line, de ? "Version %s, aktuell." : "Version %s, up to date.", online->version);
+    }
+    if (online && online->status == DOWNLOAD_RUNNING)
+        snprintf(line, sizeof line, de ? "Lädt..." : "Downloading...");
+    if (online && online->status == DOWNLOAD_FAILED)
+        snprintf(line, sizeof line, de ? "Download fehlgeschlagen oder Datei verändert. Nichts wurde installiert."
+                                       : "Download failed or the file was changed. Nothing was installed.");
+    if (mod->incompatible[0])
+        snprintf(line, sizeof line, de ? "Passt nicht zu dieser Spielversion: %s" : "Not compatible with this game version: %s",
+            mod->incompatible);
+    if (line[0])
+        textRow(screen, line);
+}
+
+static void buildModPage(void *screen, Mod *mod, int de)
+{
+    int greyed = 0;
     if (!menu.back)
         menu.back = actionCall(NULL, closeMod);
-    const char *back = de ? "ZURÜCK" : "BACK";
-    buttonRow(screen, de ? mod->nameDe : mod->nameEn, &back, &menu.back, 1);
+    backRow(screen, de ? mod->nameDe : mod->nameEn, menu.back, de);
     const char *info = de ? mod->infoDe : mod->infoEn;
     if (info[0])
         textRow(screen, info);
+    statusRow(screen, mod, de);
     gap(screen);
     for (int i = 0; i < mod->settingCount; i++) {
         Setting *setting = &mod->settings[i];
@@ -312,14 +392,139 @@ static void buildModPage(void *screen, Mod *mod)
     }
     if (greyed)
         textRow(screen, de ? "Graue Einstellungen bestimmt der Host." : "Greyed out settings are set by the host.");
+
+    InstallState state = installState(mod->name);
+    if (state == INSTALL_PENDING || state == INSTALL_REMOVING)
+        return;
+    if (!mod->update) {
+        mod->update = actionCall(mod, pressUpdate);
+        mod->remove = actionCall(mod, pressRemove);
+    }
+    const char *labels[2];
+    NativeCall *presses[2];
+    int count = 0;
+    if (state == INSTALL_OUTDATED) {
+        labels[count] = mod->confirm == 1 ? de ? "WIRKLICH UPDATEN?" : "REALLY UPDATE?" : "UPDATE";
+        presses[count++] = mod->update;
+    }
+    labels[count] = mod->confirm == 2 ? de ? "WIRKLICH ENTFERNEN?" : "REALLY REMOVE?" : de ? "DEINSTALLIEREN" : "UNINSTALL";
+    presses[count++] = mod->remove;
+    if (mod->settingCount)
+        gap(screen);
+    buttonRow(screen, "", labels, presses, count);
+}
+
+static const char *onlineLabel(OnlineMod *mod, int de)
+{
+    if (mod->status == DOWNLOAD_RUNNING)
+        return de ? "LÄDT" : "LOADING";
+    switch (installState(mod->folder)) {
+    case INSTALL_CURRENT:
+        return de ? "INSTALLIERT" : "INSTALLED";
+    case INSTALL_OUTDATED:
+        return "UPDATE";
+    case INSTALL_PENDING:
+    case INSTALL_REMOVING:
+        return de ? "NEUSTART" : "RESTART";
+    default:
+        return de ? "ANSEHEN" : "VIEW";
+    }
+}
+
+static void onlineRows(void *screen, int community, int de)
+{
+    for (int i = 0; i < onlineCount; i++) {
+        OnlineMod *mod = &onlineMods[i];
+        if (mod->community != community)
+            continue;
+        if (!mod->open) {
+            mod->open = actionCall(mod, openOnline);
+            mod->install = actionCall(mod, pressInstall);
+        }
+        const char *label = onlineLabel(mod, de);
+        buttonRow(screen, mod->name, &label, &mod->open, 1);
+    }
+}
+
+static void buildAvailable(void *screen, int de)
+{
+    if (!onlineGet) {
+        onlineGet = valueCall(CALL_FUNC_BOOL, NULL, onlineValue, NULL);
+        onlineSet = valueCall(CALL_ACTION_BOOL, NULL, NULL, onlineSwitch);
+        retry = actionCall(NULL, retryOnline);
+    }
+    toggleRow(screen, de ? "Online-Liste" : "Online list", onlineGet, onlineSet, NULL);
+    switch (onlineState()) {
+    case ONLINE_OFF:
+        textRow(screen, de ? "Lädt die Liste der Mods von GitHub. Solange der Schalter aus ist, geht der Loader nicht ins Internet."
+                           : "Loads the list of mods from GitHub. While this is off, the loader never goes online.");
+        return;
+    case ONLINE_LOADING:
+        textRow(screen, de ? "Lade Liste..." : "Loading list...");
+        return;
+    case ONLINE_FAILED: {
+        const char *label = de ? "NOCHMAL" : "RETRY";
+        buttonRow(screen, de ? "Liste nicht erreichbar." : "List not reachable.", &label, &retry, 1);
+        return;
+    }
+    case ONLINE_READY:
+        break;
+    }
+    gap(screen);
+    onlineRows(screen, 0, de);
+    int community = 0;
+    for (int i = 0; i < onlineCount; i++)
+        community |= onlineMods[i].community;
+    if (!community)
+        return;
+    gap(screen);
+    textRow(screen, de ? "Community: Mods anderer Modder. Wir prüfen sie vor der Aufnahme, geschrieben haben sie andere."
+                       : "Community: mods by other modders. We check them before listing them, but we did not write them.");
+    onlineRows(screen, 1, de);
+}
+
+static void buildOnlinePage(void *screen, OnlineMod *mod, int de)
+{
+    if (!backOnline)
+        backOnline = actionCall(NULL, openOnline);
+    backRow(screen, mod->name, backOnline, de);
+    textRow(screen, de && mod->de[0] ? mod->de : mod->en);
+    char line[160];
+    snprintf(line, sizeof line, de ? "Version %s von %s%s" : "Version %s by %s%s", mod->version, mod->author,
+        mod->community ? de ? ", Community" : ", community" : "");
+    textRow(screen, line);
+    gap(screen);
+    InstallState state = installState(mod->folder);
+    if (mod->status == DOWNLOAD_RUNNING) {
+        textRow(screen, de ? "Lädt..." : "Downloading...");
+    } else if (state == INSTALL_PENDING || mod->status == DOWNLOAD_DONE) {
+        textRow(screen, de ? "Geladen. Starte das Spiel neu, dann ist die Mod aktiv." : "Downloaded. Restart the game to use it.");
+    } else if (state == INSTALL_CURRENT) {
+        textRow(screen, de ? "Installiert und aktuell." : "Installed and up to date.");
+    } else if (state != INSTALL_REMOVING) {
+        if (mod->status == DOWNLOAD_FAILED)
+            textRow(screen, de ? "Download fehlgeschlagen oder Datei verändert. Nichts wurde installiert."
+                               : "Download failed or the file was changed. Nothing was installed.");
+        const char *label = mod->confirm ? de ? "WIRKLICH INSTALLIEREN?" : "REALLY INSTALL?"
+                          : state == INSTALL_OUTDATED ? "UPDATE" : de ? "INSTALLIEREN" : "INSTALL";
+        buttonRow(screen, "", &label, &mod->install, 1);
+    }
 }
 
 static void buildRows(void *screen)
 {
-    if (menu.page)
-        buildModPage(screen, menu.page);
-    else
-        buildList(screen);
+    int de = germanText();
+    if (menu.page) {
+        buildModPage(screen, menu.page, de);
+    } else if (onlinePage && view == VIEW_AVAILABLE) {
+        buildOnlinePage(screen, onlinePage, de);
+    } else {
+        viewRow(screen, de);
+        if (view == VIEW_INSTALLED)
+            buildInstalled(screen, de);
+        else
+            buildAvailable(screen, de);
+    }
 }
 
 static void clearPage(void *screen, void *page)
@@ -370,6 +575,13 @@ static void onBuildDev(void *context, Il2CppObject *screen)
     loaderLog("Mods-Seite aufgebaut (%d Mods)", modCount);
 }
 
+static void updateHook(void *self, const void *method)
+{
+    menu.originalUpdate(self, method);
+    if (onlineChanged() && aliveTarget(menu.screen) == self)
+        rebuild();
+}
+
 static void buildHook(void *self, void *frame, const void *method)
 {
     menu.originalBuild(self, frame, method);
@@ -404,6 +616,9 @@ int menuInstall(void)
     menu.getChild = findMethod(core, "UnityEngine", "Transform", "GetChild", 1);
     menu.gameObject = findMethod(core, "UnityEngine", "Component", "get_gameObject", 0);
     menu.destroy = findMethod(core, "UnityEngine", "Object", "Destroy", 1);
+    menu.onClick = findMethod("UnityEngine.UI", "UnityEngine.UI", "Button", "get_onClick", 0);
+    menu.unityActionType = findClass(core, "UnityEngine.Events", "UnityAction");
+    menu.addListener = classMethod(findClass(core, "UnityEngine.Events", "UnityEvent"), "AddListener", 1);
 
     menu.buildDevType = paramClass(menu.constructor, 2);
     menu.funcBoolType = paramClass(menu.toggleRow, 2);
@@ -421,6 +636,9 @@ int menuInstall(void)
     void *build = methodCode(menu.build);
     if (!build || !hookFunction(build, (void *)buildHook, (void **)&menu.originalBuild))
         loaderLog("Reiter-Name bleibt DEV TOOLS");
+    void *update = methodCode(findMethod(game, "MoonCleaners", "MoonSettingsScreen", "Update", 0));
+    if (!update || !hookFunction(update, (void *)updateHook, (void **)&menu.originalUpdate))
+        loaderLog("Online-Liste aktualisiert sich erst beim Wiederoeffnen");
     void *code = methodCode(menu.constructor);
     return code && hookFunction(code, (void *)constructorHook, (void **)&menu.originalConstructor);
 }
