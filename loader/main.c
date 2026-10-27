@@ -4,7 +4,7 @@
 
 #include "loader.h"
 
-#define LOADER_VERSION "1.0"
+#define LOADER_VERSION "1.0.0"
 
 int loadRealVersion(void);
 
@@ -426,7 +426,7 @@ BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID reserved)
     if (!unity)
         return TRUE;
     preparePaths();
-    loaderLog("Mod-Lader %s", LOADER_VERSION);
+    loaderLog("Lunar Loader %s", LOADER_VERSION);
     AddVectoredExceptionHandler(1, logCrash);
     if (!patchImport(unity, "KERNEL32.dll", "GetProcAddress", (void *)getProcAddressHook, (void **)&realGetProcAddress))
         loaderLog("Konnte mich nicht in UnityPlayer.dll einklinken, Mods bleiben aus");

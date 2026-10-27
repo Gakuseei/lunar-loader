@@ -367,8 +367,8 @@ MOD_EXPORT int ModInit(const ModApi *modApi, Mod *mod)
     api = modApi;
     self = mod;
     api->describe(mod, "J.O.O.N.A.S. Upgrades", "J.O.O.N.A.S. Upgrades",
-        "Neuer Tab SERVICES in der Upgrade-Matrix: Antrieb, Größe und Tank für alle J.O.O.N.A.S.",
-        "New SERVICES tab in the upgrade matrix: drive, size and tank for every J.O.O.N.A.S.");
+        "Antrieb, Größe und Tank für jeden J.O.O.N.A.S. Kaufbar in der Upgrade-Matrix im Tab SERVICES.",
+        "Drive, size and tank upgrades for every J.O.O.N.A.S. Buy them in the upgrade matrix, SERVICES tab.");
 
     game.getTransform = api->method("UnityEngine.CoreModule", "UnityEngine", "Component", "get_transform", 0);
     game.getScale = api->method("UnityEngine.CoreModule", "UnityEngine", "Transform", "get_localScale", 0);
