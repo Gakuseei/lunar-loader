@@ -111,3 +111,8 @@ int setHookEnabled(void *target, int enabled);
 int hooksStart(void);
 
 int menuInstall(void);
+
+int registerUpgrade(Mod *mod, const char *id, const char *titleDe, const char *titleEn, const char *summaryDe,
+    const char *summaryEn, int glyph, int maxLevel, const int *prices);
+int upgradeLevel(void *world, const char *id);
+void upgradesInstall(const wchar_t *modsDir);

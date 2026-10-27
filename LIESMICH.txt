@@ -17,10 +17,10 @@ Im Koop
 Strom und Maschinen-Tempo rechnet der Host. Damit sie wirken, braucht der Host die Mods.
 Das Licht rechnet jeder Spieler selbst.
 
-J.O.O.N.A.S. Upgrades
-Kaufen in der Basis an der Upgrade-Matrix, Tab SERVICES. Bezahlt wird aus der Teamkasse.
-Der Host braucht die Mod, sonst kann niemand die Upgrades kaufen.
-Gekaufte Stufen stehen zusaetzlich in Mods/JoonasUpgrades/worlds.ini. Wird eine Welt einmal ohne Mod gespeichert, holt die Mod sie von dort zurueck.
+Upgrades kaufen
+J.O.O.N.A.S. Upgrades, Faster Machines und Conveyor Upgrades kauft man in der Basis an der Upgrade-Matrix, Tab SERVICES. Bezahlt wird aus der Teamkasse.
+Der Host braucht die Mods, sonst kann niemand die Upgrades kaufen.
+Gekaufte Stufen stehen zusaetzlich in Mods/upgrades.ini. Wird eine Welt einmal ohne Mods gespeichert, holt der Loader sie von dort zurueck.
 
 Probleme
 Logs liegen in Mods/ModLoader.log und Mods/<Mod>/<Mod>.log, die vorherige Runde in den -prev.log Dateien.

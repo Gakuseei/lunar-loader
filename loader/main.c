@@ -266,6 +266,8 @@ static const ModApi modApi = {
     .write = writeCode,
     .hook = hookFunction,
     .hookEnabled = setHookEnabled,
+    .upgrade = registerUpgrade,
+    .upgradeLevel = upgradeLevel,
 };
 
 static void loadMod(const wchar_t *folder)
@@ -343,6 +345,7 @@ static void startFramework(void)
     }
     loaderLog(menuInstall() ? "Menue MODS eingerichtet" : "Menue MODS nicht moeglich, Mods laufen trotzdem");
     loadMods();
+    upgradesInstall(modsDir);
 }
 
 static int il2cppInitHook(const char *domainName)

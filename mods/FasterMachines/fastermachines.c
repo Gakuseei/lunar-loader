@@ -1,16 +1,22 @@
+#include <windows.h>
 #include <stdint.h>
 
 #include "modapi.h"
 
-static const char *const speeds[] = { "1x", "1.5x", "2x", "2.5x", "3x", "3.5x", "4x" };
-#define SPEED_COUNT (int)(sizeof speeds / sizeof *speeds)
+#define UPGRADE_ID "machines.speed"
+#define MAX_LEVEL 3
+#define GLYPH_TURBO 24
+
+static const float factors[MAX_LEVEL + 1] = { 1.0f, 1.5f, 2.0f, 3.0f };
+static const int prices[MAX_LEVEL] = { 200, 600, 1500 };
 
 static const char *const machines[] = { "ChamberSpec", "PressSpec" };
 #define MACHINE_COUNT (int)(sizeof machines / sizeof *machines)
 
 static const ModApi *api;
 static Mod *self;
-static const int *speed;
+static int level;
+static ULONGLONG nextLevelCheck;
 
 static void (*originalStep)(void *world, float dt, const void *method);
 
@@ -29,7 +35,7 @@ static void *(*objectGetClass)(void *);
 /** The machine specs are shared objects created by the game; the first value we see is the game's own */
 static void applySpeed(void)
 {
-    float factor = api->enabled(self) && api->isHost() ? 1.0f + 0.5f * (float)*speed : 1.0f;
+    float factor = api->enabled(self) && api->isHost() ? factors[level] : 1.0f;
     for (int i = 0; i < MACHINE_COUNT; i++) {
         void *spec = NULL;
         fieldStaticGetValue(machine[i].field, &spec);
@@ -53,14 +59,16 @@ static void applySpeed(void)
 
 static void stepHook(void *world, float dt, const void *method)
 {
+    ULONGLONG now = GetTickCount64();
+    if (now >= nextLevelCheck) {
+        nextLevelCheck = now + 500;
+        int bought = api->upgradeLevel(world, UPGRADE_ID);
+        if (bought != level)
+            api->log(self, "Stufe %d, Tempo %.1fx", bought, factors[bought]);
+        level = bought;
+    }
     applySpeed();
     originalStep(world, dt, method);
-}
-
-static void speedChanged(Mod *mod)
-{
-    (void)mod;
-    api->log(self, "Tempo %s", speeds[*speed]);
 }
 
 MOD_EXPORT int ModInit(const ModApi *modApi, Mod *mod)
@@ -68,9 +76,12 @@ MOD_EXPORT int ModInit(const ModApi *modApi, Mod *mod)
     api = modApi;
     self = mod;
     api->describe(mod, "Schnellere Maschinen", "Faster Machines",
-        "Pressure chamber und Stone press arbeiten schneller. Der Stromverbrauch bleibt gleich.",
-        "Pressure chamber and stone press work faster at the same power use.");
-    speed = api->choice(mod, "Speed", "Tempo", "Speed", speeds, SPEED_COUNT, 0, MOD_WORLD, speedChanged);
+        "Pressure chamber und Stone press arbeiten schneller. Kaufbar in der Upgrade-Matrix im Tab SERVICES.",
+        "Pressure chamber and stone press work faster. Buy it in the upgrade matrix, SERVICES tab.");
+    if (api->version < 2) {
+        api->incompatible(mod, "Loader zu alt");
+        return 0;
+    }
 
     classGetFieldFromName = api->export("il2cpp_class_get_field_from_name");
     fieldStaticGetValue = api->export("il2cpp_field_static_get_value");
@@ -93,6 +104,10 @@ MOD_EXPORT int ModInit(const ModApi *modApi, Mod *mod)
         api->incompatible(mod, "Produktion konnte nicht erweitert werden");
         return 0;
     }
-    api->log(mod, "bereit, Tempo %s", speeds[*speed]);
+    api->upgrade(mod, UPGRADE_ID, "Maschinen-Tempo", "Machine Speed",
+        "Pressure chamber und Stone press arbeiten 1,5-, 2- oder 3-mal so schnell. Der Stromverbrauch bleibt gleich.",
+        "Pressure chamber and stone press work 1.5x, 2x or 3x as fast at the same power use.",
+        GLYPH_TURBO, MAX_LEVEL, prices);
+    api->log(mod, "bereit");
     return 1;
 }

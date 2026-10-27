@@ -2,7 +2,7 @@
 
 #include <stddef.h>
 
-#define MODAPI_VERSION 1
+#define MODAPI_VERSION 2
 
 typedef struct Mod Mod;
 
@@ -35,6 +35,11 @@ typedef struct ModApi {
     int (*write)(void *target, const void *bytes, size_t length);
     int (*hook)(void *target, void *detour, void **original);
     int (*hookEnabled)(void *target, int enabled);
+
+    /** Buyable upgrade in the shared SERVICES tab of the upgrade matrix; prices holds maxLevel entries, call from ModInit */
+    int (*upgrade)(Mod *mod, const char *id, const char *titleDe, const char *titleEn, const char *summaryDe,
+        const char *summaryEn, int glyph, int maxLevel, const int *prices);
+    int (*upgradeLevel)(void *world, const char *id);
 } ModApi;
 
 #define MOD_EXPORT __declspec(dllexport)
